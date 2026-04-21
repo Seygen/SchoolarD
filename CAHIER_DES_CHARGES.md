@@ -1,7 +1,7 @@
 # Cahier des Charges — SchoolarD
 ## Application web de gestion scolaire
 
-**Version** : 1.1  
+**Version** : 1.2  
 **Date** : Avril 2026  
 **Statut** : Draft
 
@@ -158,38 +158,71 @@ Chaque classe dispose d'un espace dédié, visible uniquement par les membres de
 
 ## 4. Gestion des accès et rôles
 
-### 4.1 Rôles utilisateurs
+### 4.1 Hiérarchie des rôles
 
-| Rôle | Description | Droits |
+La plateforme distingue deux niveaux : la **plateforme** (transverse à tous les établissements) et l'**établissement** (scoped à un tenant).
+
+```
+Super Admin (plateforme)
+  └── Admin / Directeur (établissement)
+        ├── Enseignant (classe)
+        └── Parent / Tuteur (enfant)
+              └── Élève (optionnel, ≥ 13 ans)
+```
+
+### 4.2 Rôles utilisateurs
+
+| Rôle | Niveau | Description |
 |---|---|---|
-| **Directeur / Admin** | Directrice de l'école | Accès complet à toutes les fonctionnalités |
-| **Enseignant** | Professeur d'une classe | Gestion de sa classe, fiches élèves, publications, documents |
-| **Parent / Tuteur** | Parent d'un élève | Lecture de l'espace classe de son enfant, réception des notifications |
-| **Élève** (optionnel, soumis à vérification d'âge) | Accès restreint | Lecture de l'espace classe uniquement — réservé aux élèves en âge de naviguer seuls sur internet (≥ 13 ans conformément au RGPD) ; en primaire, le compte parent reste le canal principal |
+| **Super Admin** | Plateforme | Opérateur de la plateforme SchoolarD — gère tous les établissements |
+| **Directeur / Admin** | Établissement | Directrice ou directeur d'une école — gestion complète de son tenant |
+| **Enseignant** | Établissement | Professeur d'une ou plusieurs classes |
+| **Parent / Tuteur** | Établissement | Parent d'un élève inscrit |
+| **Élève** (optionnel, ≥ 13 ans) | Établissement | Accès lecture restreint à la propre classe |
 
-### 4.2 Détail des permissions
+### 4.3 Détail des permissions
 
-| Fonctionnalité | Admin | Enseignant | Parent | Élève |
-|---|---|---|---|---|
-| Importer des listes | ✅ | ❌ | ❌ | ❌ |
-| Composer les classes | ✅ | ❌ | ❌ | ❌ |
-| Voir toutes les fiches élèves | ✅ | Classe uniquement | ❌ | ❌ |
-| Modifier une fiche élève | ✅ | Classe uniquement | ❌ | ❌ |
-| Publier dans l'espace classe | ✅ | Classe uniquement | ❌ | ❌ |
-| Voir l'espace classe | ✅ | ✅ | Classe de l'enfant | Propre classe |
-| Partager des documents | ✅ | Classe uniquement | ❌ | ❌ |
-| Envoyer une notification école | ✅ | ❌ | ❌ | ❌ |
-| Envoyer une notification de classe | ✅ | ✅ | ❌ | ❌ |
-| Gérer les utilisateurs | ✅ | ❌ | ❌ | ❌ |
+| Fonctionnalité | Super Admin | Admin | Enseignant | Parent | Élève |
+|---|---|---|---|---|---|
+| Créer / suspendre un établissement | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Voir tous les établissements | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Créer un compte Admin d'école | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Accéder aux données d'un tenant | ✅ (audit only) | ❌ | ❌ | ❌ | ❌ |
+| Importer des listes | ❌ | ✅ | ❌ | ❌ | ❌ |
+| Composer les classes | ❌ | ✅ | ❌ | ❌ | ❌ |
+| Voir toutes les fiches élèves | ❌ | ✅ | Classe uniquement | ❌ | ❌ |
+| Modifier une fiche élève | ❌ | ✅ | Classe uniquement | ❌ | ❌ |
+| Publier dans l'espace classe | ❌ | ✅ | Classe uniquement | ❌ | ❌ |
+| Voir l'espace classe | ❌ | ✅ | ✅ | Classe de l'enfant | Propre classe |
+| Partager des documents | ❌ | ✅ | Classe uniquement | ❌ | ❌ |
+| Envoyer une notification école | ❌ | ✅ | ❌ | ❌ | ❌ |
+| Envoyer une notification de classe | ❌ | ✅ | ✅ | ❌ | ❌ |
+| Gérer les utilisateurs de l'école | ❌ | ✅ | ❌ | ❌ | ❌ |
 
-### 4.3 Authentification
+> Le Super Admin n'a pas accès aux données pédagogiques des élèves en mode normal. En cas d'intervention de support, tout accès exceptionnel à un tenant doit être journalisé et notifié à l'Admin de l'école concernée.
 
-- Inscription sur invitation uniquement (lien envoyé par la direction)
+### 4.4 Interface Super Admin
+
+Le Super Admin dispose d'une interface d'administration séparée (back-office), distincte de l'interface école, accessible uniquement depuis un sous-domaine dédié (ex. `admin.schoolard.fr`).
+
+**Fonctionnalités**
+- Liste de tous les établissements enregistrés (nom, pays, statut, date d'inscription, nombre d'utilisateurs actifs)
+- Créer un nouvel établissement : saisie du nom, pays, email de l'Admin, envoi automatique d'une invitation
+- Suspendre / réactiver un établissement (accès coupé pour tous les utilisateurs du tenant)
+- Supprimer un établissement avec export préalable des données (conformité RGPD)
+- Tableau de bord global : nombre total d'écoles, élèves, connexions actives
+- Accès au journal d'audit global (erreurs critiques, tentatives d'accès inter-tenant)
+- Gestion des comptes Super Admin (multi-super-admin possible, avec journal des actions)
+
+### 4.5 Authentification
+
+- **Tous les rôles** : inscription sur invitation uniquement (lien envoyé par le niveau supérieur)
 - Authentification par email + mot de passe
-- Possibilité d'authentification via Google (OAuth2)
+- Possibilité d'authentification via Google (OAuth2) pour les rôles Admin, Enseignant, Parent
 - Réinitialisation de mot de passe par email
 - Sessions sécurisées avec expiration automatique
-- **Vérification d'âge pour le rôle Élève** : à la création du compte, la date de naissance est requise. Tout utilisateur de moins de 13 ans ne peut pas créer de compte autonome (obligation RGPD pour les mineurs) — le suivi se fait exclusivement via le compte parent
+- **Super Admin : authentification à deux facteurs (2FA) obligatoire** (TOTP via application type Google Authenticator)
+- **Vérification d'âge pour le rôle Élève** : date de naissance requise à la création du compte ; tout utilisateur de moins de 13 ans ne peut pas créer de compte autonome (RGPD art. 8) — le suivi passe exclusivement par le compte parent
 
 ---
 
@@ -344,3 +377,6 @@ La plateforme est construite autour d'un modèle **multi-tenant** : chaque écol
 | SaaS | Software as a Service — logiciel hébergé et partagé entre plusieurs clients |
 | Tenant | Instance isolée d'un établissement scolaire au sein de la plateforme partagée |
 | school_id | Identifiant unique d'un établissement, utilisé pour cloisonner toutes les données |
+| Super Admin | Opérateur de la plateforme SchoolarD, niveau au-dessus des directeurs d'école |
+| Back-office | Interface d'administration réservée au Super Admin, séparée de l'interface école |
+| 2FA / TOTP | Authentification à deux facteurs via code temporaire (Time-based One-Time Password) |
