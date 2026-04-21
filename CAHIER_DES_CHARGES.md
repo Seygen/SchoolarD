@@ -1,7 +1,7 @@
 # Cahier des Charges — SchoolarD
 ## Application web de gestion scolaire
 
-**Version** : 1.0  
+**Version** : 1.1  
 **Date** : Avril 2026  
 **Statut** : Draft
 
@@ -11,7 +11,9 @@
 
 ### 1.1 Contexte
 
-SchoolarD est une application destinée à une directrice d'école primaire ou élémentaire. Elle doit centraliser et simplifier la gestion quotidienne d'un établissement : organisation des classes, suivi des élèves, communication avec les familles et partage de documents.
+SchoolarD est une plateforme SaaS multi-établissements destinée aux directeurs et directrices d'écoles primaires. Elle centralise et simplifie la gestion quotidienne d'un établissement : organisation des classes, suivi des élèves, communication avec les familles et partage de documents.
+
+La plateforme est conçue pour accueillir plusieurs écoles indépendantes, chacune opérant dans un espace cloisonné (tenant). Les données d'un établissement ne sont jamais accessibles depuis un autre. L'architecture doit permettre une montée en charge progressive et l'ajout de nouveaux établissements sans refonte technique.
 
 ### 1.2 Objectifs principaux
 
@@ -89,8 +91,9 @@ Chaque élève dispose d'une fiche individuelle accessible aux administrateurs e
 - Classe assignée
 
 **Suivi pédagogique**
-- Notes et bulletins (par matière et période)
-- Observations générales de l'enseignant
+- Appréciation générale par période (texte libre)
+- Observations de l'enseignant (comportement, progression, points de vigilance)
+- Pas de gestion de notes chiffrées ni de bulletins complexes — l'outil n'a pas vocation à remplacer un logiciel type Pronote
 
 **Cas particuliers et signalements**
 - Problèmes médicaux (allergies, traitements, protocoles d'urgence PAI)
@@ -162,7 +165,7 @@ Chaque classe dispose d'un espace dédié, visible uniquement par les membres de
 | **Directeur / Admin** | Directrice de l'école | Accès complet à toutes les fonctionnalités |
 | **Enseignant** | Professeur d'une classe | Gestion de sa classe, fiches élèves, publications, documents |
 | **Parent / Tuteur** | Parent d'un élève | Lecture de l'espace classe de son enfant, réception des notifications |
-| **Élève** (optionnel) | Accès restreint | Lecture de l'espace classe uniquement |
+| **Élève** (optionnel, soumis à vérification d'âge) | Accès restreint | Lecture de l'espace classe uniquement — réservé aux élèves en âge de naviguer seuls sur internet (≥ 13 ans conformément au RGPD) ; en primaire, le compte parent reste le canal principal |
 
 ### 4.2 Détail des permissions
 
@@ -186,6 +189,7 @@ Chaque classe dispose d'un espace dédié, visible uniquement par les membres de
 - Possibilité d'authentification via Google (OAuth2)
 - Réinitialisation de mot de passe par email
 - Sessions sécurisées avec expiration automatique
+- **Vérification d'âge pour le rôle Élève** : à la création du compte, la date de naissance est requise. Tout utilisateur de moins de 13 ans ne peut pas créer de compte autonome (obligation RGPD pour les mineurs) — le suivi se fait exclusivement via le compte parent
 
 ---
 
@@ -199,7 +203,22 @@ Application web progressive (**PWA — Progressive Web App**) :
 - Fonctionnement partiel hors-ligne (lecture du cache) pour les parents
 - Notifications push via service workers
 
-### 5.2 Stack technique recommandée
+### 5.2 Architecture multi-tenant
+
+La plateforme est construite autour d'un modèle **multi-tenant** : chaque école est un tenant indépendant partageant la même infrastructure, mais avec des données strictement isolées.
+
+**Stratégie d'isolation choisie : shared database, tenant_id column**
+- Toutes les tables métier contiennent une colonne `school_id` (identifiant de l'école)
+- Chaque requête SQL est systématiquement filtrée par `school_id` au niveau de la couche service
+- Les fichiers stockés sont organisés par préfixe `/{school_id}/...` dans le bucket objet
+- Aucune donnée inter-école ne transite par l'application
+
+**Extensibilité**
+- Ajout d'un nouvel établissement = création d'un enregistrement School + compte admin, sans déploiement
+- Architecture préparée pour une montée en charge : indexes sur `school_id`, possibilité de partitionnement futur par école si nécessaire
+- Versioning de l'API pour permettre des évolutions sans rupture
+
+### 5.3 Stack technique recommandée
 
 | Composant | Technologie proposée |
 |---|---|
@@ -213,13 +232,13 @@ Application web progressive (**PWA — Progressive Web App**) :
 | Notifications push | Web Push API (service worker) |
 | Hébergement | Vercel, Railway ou VPS dédié |
 
-### 5.3 Import de fichiers
+### 5.4 Import de fichiers
 
 - Parsing PDF : librairie `pdf-parse` ou `pdfjs-dist`
 - Parsing Excel/CSV : librairie `xlsx` (SheetJS)
 - Validation des données côté serveur avant persistence
 
-### 5.4 Performance et disponibilité
+### 5.5 Performance et disponibilité
 
 - Temps de chargement initial < 3 secondes sur connexion 4G
 - Disponibilité cible : 99,5 % (hors maintenance planifiée)
@@ -250,7 +269,8 @@ Application web progressive (**PWA — Progressive Web App**) :
 
 - Un parent ne peut accéder qu'aux données relatives à son propre enfant
 - Un enseignant ne peut accéder qu'aux données de sa classe
-- Isolation stricte entre les établissements si le système est multi-école à terme
+- **Isolation stricte entre établissements** : chaque requête applicative est filtrée par `school_id`; une faille ne peut pas exposer les données d'une autre école
+- Audit automatique : toute tentative d'accès à une ressource hors du tenant courant est bloquée et journalisée
 
 ---
 
@@ -291,12 +311,14 @@ Application web progressive (**PWA — Progressive Web App**) :
 
 ## 8. Contraintes et hypothèses
 
-- L'application est pensée pour une école de taille standard : 5 à 15 classes, 100 à 400 élèves
+- Chaque école est un tenant indépendant ; l'ajout d'un établissement ne nécessite pas de déploiement
+- Une école de taille standard représente : 5 à 15 classes, 100 à 400 élèves
 - Un élève ne peut être assigné qu'à une seule classe à la fois
 - Une classe a obligatoirement un et un seul enseignant principal
 - Les accompagnateurs (AESH) peuvent être partagés entre plusieurs classes
 - L'accès parents est activé classe par classe, à la discrétion de la direction
-- La gestion des notes est simplifiée (pas un remplacement d'un logiciel type Pronote ou EcoleDirecte)
+- La gestion des suivis pédagogiques est simplifiée — l'outil ne remplace pas Pronote ou EcoleDirecte
+- Le rôle Élève est réservé aux enfants de 13 ans et plus (RGPD) ; en primaire, les parents sont le canal principal
 
 ---
 
@@ -319,3 +341,6 @@ Application web progressive (**PWA — Progressive Web App**) :
 | PWA | Progressive Web App — application web installable sur mobile |
 | RGPD | Règlement Général sur la Protection des Données |
 | MVP | Minimum Viable Product — version minimale fonctionnelle |
+| SaaS | Software as a Service — logiciel hébergé et partagé entre plusieurs clients |
+| Tenant | Instance isolée d'un établissement scolaire au sein de la plateforme partagée |
+| school_id | Identifiant unique d'un établissement, utilisé pour cloisonner toutes les données |
