@@ -1,0 +1,546 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PLATEFORME  (hors tenant — pas de school_id)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model SuperAdmin {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  totpSecret   String    @map("totp_secret")
+  fullName     String    @map("full_name")
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  lastLoginAt  DateTime? @map("last_login_at")
+
+  @@map("super_admins")
+}
+
+enum SchoolStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+model School {
+  id           String       @id @default(uuid())
+  name         String
+  slug         String       @unique
+  country      String       @default("FR") @db.Char(2)
+  contactEmail String?      @map("contact_email")
+  status       SchoolStatus @default(ACTIVE)
+  createdAt    DateTime     @default(now()) @map("created_at")
+  suspendedAt  DateTime?    @map("suspended_at")
+  deletedAt    DateTime?    @map("deleted_at")
+
+  users         User[]
+  students      Student[]
+  staffMembers  StaffMember[]
+  academicYears AcademicYear[]
+  classes       Class[]
+  notifications Notification[]
+  importJobs    ImportJob[]
+  documents     Document[]
+  auditLogs     AuditLog[]
+
+  @@map("schools")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTILISATEURS
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  TEACHER
+  PARENT
+  STUDENT
+}
+
+model User {
+  id            String    @id @default(uuid())
+  schoolId      String    @map("school_id")
+  email         String
+  passwordHash  String?   @map("password_hash")
+  oauthProvider String?   @map("oauth_provider")
+  oauthSub      String?   @map("oauth_sub")
+  firstName     String    @map("first_name")
+  lastName      String    @map("last_name")
+  role          UserRole
+  dateOfBirth   DateTime? @map("date_of_birth") @db.Date
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  lastLoginAt   DateTime? @map("last_login_at")
+
+  school              School               @relation(fields: [schoolId], references: [id])
+  parentStudentLinks  ParentStudentLink[]
+  classTeachers       ClassTeacher[]
+  posts               Post[]
+  postComments        PostComment[]
+  uploadedDocuments   Document[]
+  studentObservations StudentObservation[]
+  sentNotifications   Notification[]
+  notificationReads   NotificationRead[]
+  importJobs          ImportJob[]
+  medicalUpdates      StudentMedical[]
+
+  @@unique([schoolId, email])
+  @@index([schoolId, role])
+  @@index([email])
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ÉLÈVES
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum StudentLevel {
+  TPS
+  PS
+  MS
+  GS
+  CP
+  CE1
+  CE2
+  CM1
+  CM2
+}
+
+enum Gender {
+  M
+  F
+  X
+}
+
+model Student {
+  id          String       @id @default(uuid())
+  schoolId    String       @map("school_id")
+  firstName   String       @map("first_name")
+  lastName    String       @map("last_name")
+  dateOfBirth DateTime     @map("date_of_birth") @db.Date
+  gender      Gender?
+  photoUrl    String?      @map("photo_url")
+  level       StudentLevel
+  notes       String?
+  isActive    Boolean      @default(true) @map("is_active")
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  school           School               @relation(fields: [schoolId], references: [id])
+  contacts         StudentContact[]
+  medical          StudentMedical?
+  observations     StudentObservation[]
+  parentLinks      ParentStudentLink[]
+  classEnrollments ClassEnrollment[]
+
+  @@index([schoolId])
+  @@index([schoolId, level])
+  @@map("students")
+}
+
+enum ContactRelationship {
+  MOTHER
+  FATHER
+  GUARDIAN
+  OTHER
+}
+
+model StudentContact {
+  id                 String              @id @default(uuid())
+  studentId          String              @map("student_id")
+  schoolId           String              @map("school_id")
+  firstName          String              @map("first_name")
+  lastName           String              @map("last_name")
+  relationship       ContactRelationship
+  phone              String?
+  email              String?
+  isAuthorizedPickup Boolean             @default(false) @map("is_authorized_pickup")
+  isEmergencyContact Boolean             @default(false) @map("is_emergency_contact")
+  sortOrder          Int                 @default(0) @map("sort_order") @db.SmallInt
+
+  student Student @relation(fields: [studentId], references: [id])
+
+  @@index([studentId])
+  @@map("student_contacts")
+}
+
+// Données médicales dans une table séparée pour contrôle d'accès renforcé
+model StudentMedical {
+  id          String   @id @default(uuid())
+  studentId   String   @unique @map("student_id")
+  schoolId    String   @map("school_id")
+  allergies   String?
+  treatments  String?
+  paiProtocol String?  @map("pai_protocol")
+  homeSupport String?  @map("home_support")
+  otherNotes  String?  @map("other_notes")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+  updatedById String?  @map("updated_by")
+
+  student   Student @relation(fields: [studentId], references: [id])
+  updatedBy User?   @relation(fields: [updatedById], references: [id])
+
+  @@map("student_medical")
+}
+
+model StudentObservation {
+  id        String   @id @default(uuid())
+  studentId String   @map("student_id")
+  schoolId  String   @map("school_id")
+  authorId  String   @map("author_id")
+  period    String
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  student Student @relation(fields: [studentId], references: [id])
+  author  User    @relation(fields: [authorId], references: [id])
+
+  @@index([studentId])
+  @@map("student_observations")
+}
+
+model ParentStudentLink {
+  id           String   @id @default(uuid())
+  schoolId     String   @map("school_id")
+  parentUserId String   @map("parent_user_id")
+  studentId    String   @map("student_id")
+  relationship String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  parent  User    @relation(fields: [parentUserId], references: [id])
+  student Student @relation(fields: [studentId], references: [id])
+
+  @@unique([parentUserId, studentId])
+  @@index([parentUserId])
+  @@index([studentId])
+  @@map("parent_student_links")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PERSONNEL (AESH, AVS)
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum StaffType {
+  AESH
+  AVS
+  OTHER
+}
+
+model StaffMember {
+  id        String    @id @default(uuid())
+  schoolId  String    @map("school_id")
+  firstName String    @map("first_name")
+  lastName  String    @map("last_name")
+  staffType StaffType @default(AESH) @map("staff_type")
+  email     String?
+  phone     String?
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  school     School       @relation(fields: [schoolId], references: [id])
+  classStaff ClassStaff[]
+
+  @@index([schoolId])
+  @@map("staff_members")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ANNÉES SCOLAIRES ET CLASSES
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AcademicYear {
+  id        String   @id @default(uuid())
+  schoolId  String   @map("school_id")
+  label     String
+  startDate DateTime @map("start_date") @db.Date
+  endDate   DateTime @map("end_date") @db.Date
+  isCurrent Boolean  @default(false) @map("is_current")
+
+  school  School  @relation(fields: [schoolId], references: [id])
+  classes Class[]
+
+  @@unique([schoolId, label])
+  @@map("academic_years")
+}
+
+model Class {
+  id             String   @id @default(uuid())
+  schoolId       String   @map("school_id")
+  academicYearId String   @map("academic_year_id")
+  name           String
+  level          String?
+  maxStudents    Int      @default(25) @map("max_students") @db.SmallInt
+  parentAccess   Boolean  @default(false) @map("parent_access")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  school       School            @relation(fields: [schoolId], references: [id])
+  academicYear AcademicYear      @relation(fields: [academicYearId], references: [id])
+  enrollments  ClassEnrollment[]
+  teachers     ClassTeacher[]
+  staff        ClassStaff[]
+  posts        Post[]
+  documents    Document[]
+  notifications Notification[]
+
+  @@index([schoolId, academicYearId])
+  @@map("classes")
+}
+
+model ClassEnrollment {
+  id           String    @id @default(uuid())
+  schoolId     String    @map("school_id")
+  classId      String    @map("class_id")
+  studentId    String    @map("student_id")
+  enrolledAt   DateTime  @default(now()) @map("enrolled_at")
+  unenrolledAt DateTime? @map("unenrolled_at")
+
+  class   Class   @relation(fields: [classId], references: [id])
+  student Student @relation(fields: [studentId], references: [id])
+
+  @@unique([classId, studentId])
+  @@index([studentId])
+  @@map("class_enrollments")
+}
+
+model ClassTeacher {
+  id         String   @id @default(uuid())
+  schoolId   String   @map("school_id")
+  classId    String   @map("class_id")
+  userId     String   @map("user_id")
+  isPrimary  Boolean  @default(true) @map("is_primary")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  class Class @relation(fields: [classId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@unique([classId, userId])
+  @@map("class_teachers")
+}
+
+model ClassStaff {
+  id            String   @id @default(uuid())
+  schoolId      String   @map("school_id")
+  classId       String   @map("class_id")
+  staffMemberId String   @map("staff_member_id")
+  assignedAt    DateTime @default(now()) @map("assigned_at")
+
+  class       Class       @relation(fields: [classId], references: [id])
+  staffMember StaffMember @relation(fields: [staffMemberId], references: [id])
+
+  @@unique([classId, staffMemberId])
+  @@map("class_staff")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ESPACE CLASSE — PUBLICATIONS & DOCUMENTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Post {
+  id              String    @id @default(uuid())
+  schoolId        String    @map("school_id")
+  classId         String    @map("class_id")
+  authorId        String    @map("author_id")
+  content         String
+  commentsEnabled Boolean   @default(true) @map("comments_enabled")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  class       Class           @relation(fields: [classId], references: [id])
+  author      User            @relation(fields: [authorId], references: [id])
+  attachments PostAttachment[]
+  comments    PostComment[]
+
+  @@index([classId])
+  @@map("posts")
+}
+
+enum FileType {
+  PDF
+  IMAGE
+  AUDIO
+  VIDEO
+  OTHER
+}
+
+model PostAttachment {
+  id            String   @id @default(uuid())
+  schoolId      String   @map("school_id")
+  postId        String   @map("post_id")
+  fileName      String   @map("file_name")
+  fileUrl       String   @map("file_url")
+  fileType      FileType @map("file_type")
+  fileSizeBytes BigInt?  @map("file_size_bytes")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  post Post @relation(fields: [postId], references: [id])
+
+  @@map("post_attachments")
+}
+
+model PostComment {
+  id        String    @id @default(uuid())
+  schoolId  String    @map("school_id")
+  postId    String    @map("post_id")
+  authorId  String    @map("author_id")
+  content   String
+  createdAt DateTime  @default(now()) @map("created_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  post   Post @relation(fields: [postId], references: [id])
+  author User @relation(fields: [authorId], references: [id])
+
+  @@index([postId])
+  @@map("post_comments")
+}
+
+model DocumentFolder {
+  id        String   @id @default(uuid())
+  schoolId  String   @map("school_id")
+  classId   String?  @map("class_id")
+  parentId  String?  @map("parent_id")
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  parent    DocumentFolder?  @relation("FolderHierarchy", fields: [parentId], references: [id])
+  children  DocumentFolder[] @relation("FolderHierarchy")
+  documents Document[]
+
+  @@map("document_folders")
+}
+
+model Document {
+  id            String    @id @default(uuid())
+  schoolId      String    @map("school_id")
+  folderId      String?   @map("folder_id")
+  classId       String?   @map("class_id")
+  uploaderId    String    @map("uploader_id")
+  name          String
+  fileUrl       String    @map("file_url")
+  fileType      FileType  @map("file_type")
+  fileSizeBytes BigInt?   @map("file_size_bytes")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  school   School          @relation(fields: [schoolId], references: [id])
+  folder   DocumentFolder? @relation(fields: [folderId], references: [id])
+  class    Class?          @relation(fields: [classId], references: [id])
+  uploader User            @relation(fields: [uploaderId], references: [id])
+
+  @@index([schoolId, classId])
+  @@map("documents")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum NotificationScope {
+  SCHOOL
+  CLASS
+}
+
+model Notification {
+  id            String            @id @default(uuid())
+  schoolId      String            @map("school_id")
+  authorId      String            @map("author_id")
+  title         String
+  body          String
+  targetScope   NotificationScope @map("target_scope")
+  targetClassId String?           @map("target_class_id")
+  createdAt     DateTime          @default(now()) @map("created_at")
+
+  school      School             @relation(fields: [schoolId], references: [id])
+  author      User               @relation(fields: [authorId], references: [id])
+  targetClass Class?             @relation(fields: [targetClassId], references: [id])
+  reads       NotificationRead[]
+
+  @@index([schoolId])
+  @@map("notifications")
+}
+
+model NotificationRead {
+  notificationId String   @map("notification_id")
+  userId         String   @map("user_id")
+  readAt         DateTime @default(now()) @map("read_at")
+
+  notification Notification @relation(fields: [notificationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@id([notificationId, userId])
+  @@map("notification_reads")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// IMPORTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ImportType {
+  STUDENTS
+  TEACHERS
+  STAFF
+}
+
+enum ImportStatus {
+  PENDING
+  PROCESSING
+  DONE
+  ERROR
+}
+
+model ImportJob {
+  id           String       @id @default(uuid())
+  schoolId     String       @map("school_id")
+  authorId     String       @map("author_id")
+  fileName     String       @map("file_name")
+  fileUrl      String       @map("file_url")
+  importType   ImportType   @map("import_type")
+  status       ImportStatus @default(PENDING)
+  rowsTotal    Int?         @map("rows_total")
+  rowsImported Int?         @map("rows_imported")
+  rowsSkipped  Int?         @map("rows_skipped")
+  errorDetails Json?        @map("error_details")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  processedAt  DateTime?    @map("processed_at")
+
+  school School @relation(fields: [schoolId], references: [id])
+  author User   @relation(fields: [authorId], references: [id])
+
+  @@map("import_jobs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// JOURNAL D'AUDIT
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ActorType {
+  USER
+  SUPER_ADMIN
+  SYSTEM
+}
+
+model AuditLog {
+  id           String    @id @default(uuid())
+  schoolId     String?   @map("school_id")
+  actorId      String?   @map("actor_id")
+  actorType    ActorType @map("actor_type")
+  action       String
+  resourceType String?   @map("resource_type")
+  resourceId   String?   @map("resource_id")
+  metadata     Json?
+  ipAddress    String?   @map("ip_address")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  school School? @relation(fields: [schoolId], references: [id])
+
+  @@index([schoolId])
+  @@index([actorId])
+  @@map("audit_logs")
+}
