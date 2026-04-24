@@ -149,6 +149,27 @@ export async function saveContact(
   revalidatePath(`/eleves/${studentId}`)
 }
 
+export async function deleteStudent(studentId: string) {
+  const session = await requireSchoolSession()
+  if (session.user.role !== "ADMIN") throw new Error("Accès refusé")
+  const schoolId = session.user.schoolId!
+
+  // Unenroll from all classes
+  await prisma.classEnrollment.updateMany({
+    where: { studentId, schoolId, unenrolledAt: null },
+    data: { unenrolledAt: new Date() },
+  })
+
+  // Soft delete
+  await prisma.student.update({
+    where: { id: studentId },
+    data: { isActive: false },
+  })
+
+  revalidatePath("/eleves")
+  redirect("/eleves")
+}
+
 export async function deleteContact(studentId: string, contactId: string) {
   await requireSchoolSession()
   await prisma.studentContact.delete({ where: { id: contactId } })

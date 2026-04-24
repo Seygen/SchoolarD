@@ -99,6 +99,26 @@ export async function createClass(name: string, level: string, maxStudents: numb
   }
 }
 
+export async function deleteClass(classId: string) {
+  const session = await requireAdmin()
+  const schoolId = session.user.schoolId!
+
+  // Unenroll all students
+  await prisma.classEnrollment.updateMany({
+    where: { classId, schoolId, unenrolledAt: null },
+    data: { unenrolledAt: new Date() },
+  })
+
+  // Remove teacher / staff links
+  await prisma.classTeacher.deleteMany({ where: { classId, schoolId } })
+  await prisma.classStaff.deleteMany({ where: { classId, schoolId } })
+
+  await prisma.class.delete({ where: { id: classId } })
+
+  revalidatePath("/classes/composer")
+  revalidatePath("/classes")
+}
+
 export async function assignTeacher(classId: string, userId: string) {
   const session = await requireAdmin()
   const schoolId = session.user.schoolId!

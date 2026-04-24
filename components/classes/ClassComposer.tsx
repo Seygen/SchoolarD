@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { LEVEL_COLOR, LEVELS_ORDERED } from "@/lib/constants"
-import { saveComposition, createClass, assignTeacher } from "@/app/(school)/classes/actions"
+import { saveComposition, createClass, assignTeacher, deleteClass } from "@/app/(school)/classes/actions"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -153,6 +153,18 @@ export default function ClassComposer({
     startTransition(() => assignTeacher(classId, userId))
   }
 
+  function handleDeleteClass(classId: string) {
+    startTransition(async () => {
+      await deleteClass(classId)
+      setClasses((prev) => prev.filter((c) => c.id !== classId))
+      setAssignments((prev) => {
+        const next = { ...prev }
+        Object.keys(next).forEach((sid) => { if (next[sid] === classId) next[sid] = null })
+        return next
+      })
+    })
+  }
+
   // ── Stats ───────────────────────────────────────────────────────────────────
 
   const totalAssigned = students.filter((s) => assignments[s.id] !== null).length
@@ -213,9 +225,19 @@ export default function ClassComposer({
               <div className="px-4 pt-4 pb-2">
                 <div className="flex items-center justify-between mb-1">
                   <h2 className="font-semibold text-gray-800 text-sm">{cls.name}</h2>
-                  <span className={`text-xs font-medium ${isFull ? "text-red-500" : "text-gray-400"}`}>
-                    {classStudents.length}/{cls.maxStudents}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-medium ${isFull ? "text-red-500" : "text-gray-400"}`}>
+                      {classStudents.length}/{cls.maxStudents}
+                    </span>
+                    <button
+                      onClick={() => handleDeleteClass(cls.id)}
+                      disabled={pending}
+                      title="Supprimer la classe"
+                      className="text-gray-300 hover:text-red-400 text-xs leading-none"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
                 {/* Sélecteur enseignant */}
                 <select

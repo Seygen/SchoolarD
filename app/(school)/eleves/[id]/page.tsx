@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation"
 import { prisma } from "@/lib/db"
 import Link from "next/link"
 import StudentProfile from "@/components/students/StudentProfile"
+import DeleteStudentButton from "@/components/students/DeleteStudentButton"
 
 async function checkAccess(
   studentId: string,
@@ -91,13 +92,13 @@ export default async function StudentProfilePage({
 
   return (
     <div className="p-6 max-w-3xl">
-      {/* Breadcrumb */}
-      <Link
-        href="/eleves"
-        className="text-sm text-gray-400 hover:text-gray-600 mb-4 inline-block"
-      >
-        ← Annuaire
-      </Link>
+      {/* Breadcrumb + actions */}
+      <div className="flex items-center justify-between mb-4">
+        <Link href="/eleves" className="text-sm text-gray-400 hover:text-gray-600">
+          ← Annuaire
+        </Link>
+        {role === "ADMIN" && <DeleteStudentButton studentId={student.id} />}
+      </div>
 
       <StudentProfile
         student={student as any}
