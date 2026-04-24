@@ -3,7 +3,6 @@
 import { useState, useRef, useTransition } from "react"
 import {
   parseImportFile,
-  autoDetectMapping,
   validateRows,
   importStudents,
   type ParseResult,
@@ -11,6 +10,7 @@ import {
   type ValidationResult,
   type NormalizedStudent,
 } from "@/app/(school)/import/actions"
+import { autoDetectMapping } from "@/lib/import-utils"
 import { LEVELS_ORDERED } from "@/lib/constants"
 
 type Step = "upload" | "mapping" | "validation" | "done"

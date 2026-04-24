@@ -112,28 +112,6 @@ function parseCsv(text: string): ParseResult {
   return { headers, rows: rows.slice(0, 1000), total: rows.length }
 }
 
-// ── Autodetection des colonnes ────────────────────────────────────────────────
-
-const SYNONYMS: Record<keyof ColumnMapping, string[]> = {
-  firstName:   ["prénom", "prenom", "first name", "firstname", "given name"],
-  lastName:    ["nom", "nom de famille", "last name", "lastname", "family name", "surname"],
-  level:       ["niveau", "classe", "level", "grade", "section"],
-  dateOfBirth: ["date de naissance", "naissance", "ddn", "date_naissance", "birthdate", "birth date"],
-  gender:      ["genre", "sexe", "gender", "sex"],
-}
-
-export function autoDetectMapping(headers: string[]): Partial<ColumnMapping> {
-  const lower = headers.map((h) => h.toLowerCase().trim())
-  const mapping: Partial<ColumnMapping> = {}
-
-  for (const [field, synonyms] of Object.entries(SYNONYMS) as [keyof ColumnMapping, string[]][]) {
-    const match = lower.findIndex((h) => synonyms.some((s) => h.includes(s)))
-    if (match !== -1) mapping[field] = headers[match]
-  }
-
-  return mapping
-}
-
 // ── Validation ────────────────────────────────────────────────────────────────
 
 const LEVEL_MAP: Record<string, StudentLevel> = {
