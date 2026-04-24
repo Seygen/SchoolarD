@@ -20,7 +20,7 @@ export type ColumnMapping = {
   firstName: string
   lastName: string
   level: string
-  dateOfBirth?: string
+  dateOfBirth: string
   gender?: string
 }
 
@@ -62,10 +62,22 @@ export async function parseImportFile(formData: FormData): Promise<ParseResult> 
   throw new Error("Format non supporté. Utilisez .xlsx, .xls ou .csv")
 }
 
+function excelCellToString(value: unknown): string {
+  if (value == null) return ""
+  // xlsx avec cellDates:true renvoie des objets Date pour les cellules de type date
+  if (value instanceof Date) {
+    const y = value.getFullYear()
+    const m = String(value.getMonth() + 1).padStart(2, "0")
+    const d = String(value.getDate()).padStart(2, "0")
+    return `${y}-${m}-${d}`
+  }
+  return String(value).trim()
+}
+
 function parseExcel(buffer: Buffer): ParseResult {
-  const workbook = XLSX.read(buffer, { type: "buffer" })
+  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true })
   const sheet = workbook.Sheets[workbook.SheetNames[0]]
-  const raw = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 }) as unknown[][]
+  const raw = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: false }) as unknown[][]
 
   if (!raw.length) return { headers: [], rows: [], total: 0 }
 
@@ -76,7 +88,7 @@ function parseExcel(buffer: Buffer): ParseResult {
     .map((row) => {
       const obj: ParsedRow = {}
       headers.forEach((h, i) => {
-        obj[h] = (row as unknown[])[i] != null ? String((row as unknown[])[i]).trim() : ""
+        obj[h] = excelCellToString((row as unknown[])[i])
       })
       return obj
     })
@@ -146,14 +158,18 @@ function normalizeGender(raw: string): Gender | null {
   return null
 }
 
-function normalizeDate(raw: string): string {
-  if (!raw) return "2018-01-01"
-  // DD/MM/YYYY → YYYY-MM-DD
-  const dmy = raw.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/)
+function normalizeDate(raw: string): string | null {
+  if (!raw?.trim()) return null
+  const s = raw.trim()
+  // Already ISO YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+  // DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
+  const dmy = s.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/)
   if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`
-  // Already ISO
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw
-  return "2018-01-01"
+  // YYYY/MM/DD
+  const ymd = s.match(/^(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})$/)
+  if (ymd) return `${ymd[1]}-${ymd[2].padStart(2, "0")}-${ymd[3].padStart(2, "0")}`
+  return null
 }
 
 export async function validateRows(
@@ -198,11 +214,18 @@ export async function validateRows(
       return
     }
 
+    const rawDob = row[mapping.dateOfBirth]?.trim() ?? ""
+    const dateOfBirth = normalizeDate(rawDob)
+    if (!dateOfBirth) {
+      errors.push({ row: rowNum, message: `Date de naissance invalide ou manquante : "${rawDob}"` })
+      return
+    }
+
     const student: NormalizedStudent = {
       firstName,
       lastName,
       level,
-      dateOfBirth: normalizeDate(mapping.dateOfBirth ? row[mapping.dateOfBirth] : ""),
+      dateOfBirth,
       gender: mapping.gender ? normalizeGender(row[mapping.gender]) : null,
     }
 

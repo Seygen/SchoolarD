@@ -15,12 +15,12 @@ import { LEVELS_ORDERED } from "@/lib/constants"
 
 type Step = "upload" | "mapping" | "validation" | "done"
 
-const REQUIRED_FIELDS: (keyof ColumnMapping)[] = ["firstName", "lastName", "level"]
+const REQUIRED_FIELDS: (keyof ColumnMapping)[] = ["firstName", "lastName", "level", "dateOfBirth"]
 const FIELD_LABELS: Record<keyof ColumnMapping, string> = {
   firstName:   "Prénom *",
   lastName:    "Nom *",
   level:       "Niveau *",
-  dateOfBirth: "Date de naissance",
+  dateOfBirth: "Date de naissance *",
   gender:      "Genre",
 }
 
