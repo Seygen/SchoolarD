@@ -98,12 +98,20 @@ export default async function ElevesPage({
           </p>
         </div>
         {role === "ADMIN" && (
-          <Link
-            href="/eleves/nouveau"
-            className="bg-brand-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-brand-700 transition-colors"
-          >
-            + Ajouter un élève
-          </Link>
+          <div className="flex gap-2">
+            <Link
+              href="/import"
+              className="border border-gray-200 text-gray-600 text-sm px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              📥 Importer Excel / CSV
+            </Link>
+            <Link
+              href="/eleves/nouveau"
+              className="bg-brand-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-brand-700 transition-colors"
+            >
+              + Ajouter un élève
+            </Link>
+          </div>
         )}
       </div>
 
