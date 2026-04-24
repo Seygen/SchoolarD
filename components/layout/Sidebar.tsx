@@ -17,16 +17,15 @@ const adminNav: NavItem[] = [
 ]
 
 const teacherNav: NavItem[] = [
-  { label: "Ma classe",     href: "/dashboard",  icon: "🏠" },
-  { label: "Élèves",        href: "/eleves",     icon: "👥" },
-  { label: "Publications",  href: "/publications", icon: "📣" },
-  { label: "Documents",     href: "/documents",  icon: "📂" },
+  { label: "Tableau de bord", href: "/dashboard",         icon: "🏠" },
+  { label: "Élèves",          href: "/eleves",            icon: "👥" },
+  { label: "Mes classes",     href: "/classes",           icon: "🏫" },
+  { label: "Notifications",   href: "/notifications/new", icon: "🔔" },
 ]
 
 const parentNav: NavItem[] = [
-  { label: "Actualités", href: "/dashboard",  icon: "🏠" },
-  { label: "Documents",  href: "/documents",  icon: "📂" },
-  { label: "Mon enfant", href: "/mon-enfant", icon: "👤" },
+  { label: "Actualités", href: "/dashboard", icon: "🏠" },
+  { label: "Classes",    href: "/classes",   icon: "🏫" },
 ]
 
 function getNav(role: string): NavItem[] {
