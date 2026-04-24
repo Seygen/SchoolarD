@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import * as XLSX from "xlsx"
 import { LEVEL_COLOR, LEVELS_ORDERED } from "@/lib/constants"
 import { saveComposition, createClass, assignTeacher, deleteClass } from "@/app/(school)/classes/actions"
 
@@ -165,6 +166,60 @@ export default function ClassComposer({
     })
   }
 
+  // ── Export Excel ─────────────────────────────────────────────────────────────
+
+  function handleExport() {
+    const wb = XLSX.utils.book_new()
+    const classMap = new Map(classes.map((c) => [c.id, c]))
+
+    // Feuille "Récapitulatif" — tous les élèves triés par classe puis par nom
+    const recap = [...students]
+      .sort((a, b) => {
+        const ca = assignments[a.id] ?? "￿"
+        const cb = assignments[b.id] ?? "￿"
+        if (ca !== cb) return ca.localeCompare(cb)
+        return a.lastName.localeCompare(b.lastName)
+      })
+      .map((s) => {
+        const cls = assignments[s.id] ? classMap.get(assignments[s.id]!) : null
+        return {
+          Classe: cls?.name ?? "Non assigné",
+          "Niveau classe": cls?.level ?? "",
+          Enseignant: cls?.teacherName ?? "",
+          Nom: s.lastName,
+          Prénom: s.firstName,
+          Niveau: s.level,
+          Sexe: s.gender === "F" ? "F" : s.gender === "M" ? "M" : "",
+        }
+      })
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(recap), "Récapitulatif")
+
+    // Une feuille par classe
+    for (const cls of classes) {
+      const rows = students
+        .filter((s) => assignments[s.id] === cls.id)
+        .sort((a, b) => a.lastName.localeCompare(b.lastName))
+        .map((s, i) => ({
+          "#": i + 1,
+          Nom: s.lastName,
+          Prénom: s.firstName,
+          Niveau: s.level,
+          Sexe: s.gender === "F" ? "F" : s.gender === "M" ? "M" : "",
+        }))
+      const sheetName = cls.name.slice(0, 31)
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), sheetName)
+    }
+
+    const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" })
+    const blob = new Blob([buf], { type: "application/octet-stream" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "composition-classes.xlsx"
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   // ── Stats ───────────────────────────────────────────────────────────────────
 
   const totalAssigned = students.filter((s) => assignments[s.id] !== null).length
@@ -184,6 +239,12 @@ export default function ClassComposer({
           className="flex items-center gap-2 text-sm bg-white border border-gray-200 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
         >
           + Nouvelle classe
+        </button>
+        <button
+          onClick={handleExport}
+          className="flex items-center gap-2 text-sm bg-white border border-gray-200 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          📥 Exporter Excel
         </button>
         <div className="flex-1" />
         <span className="text-sm text-gray-400">
