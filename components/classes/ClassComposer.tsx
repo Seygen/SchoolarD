@@ -36,45 +36,51 @@ function autoDistributeAlgo(
 
   if (!classes.length) return result
 
-  // Count how many each class currently has (all start at 0)
+  // Compteurs de places occupées (on part de 0, répartition depuis zéro)
   const counts: Record<string, number> = {}
   classes.forEach((c) => { counts[c.id] = 0 })
 
-  // Sort students: alternate M/F within each level
+  // Regroupe et trie les élèves par niveau en alternant F/M
   const byLevel: Record<string, StudentCard[]> = {}
   LEVELS_ORDERED.forEach((l) => { byLevel[l] = [] })
-  students.forEach((s) => {
-    if (byLevel[s.level]) byLevel[s.level].push(s)
-  })
+  students.forEach((s) => { if (byLevel[s.level]) byLevel[s.level].push(s) })
 
-  const sorted: StudentCard[] = []
   for (const level of LEVELS_ORDERED) {
-    const girls = byLevel[level].filter((s) => s.gender === "F")
-    const boys = byLevel[level].filter((s) => s.gender === "M")
-    const other = byLevel[level].filter((s) => s.gender !== "F" && s.gender !== "M")
+    const levelStudents = byLevel[level]
+    if (!levelStudents.length) continue
+
+    // Classes acceptant ce niveau : niveau identique OU aucun niveau fixé
+    const eligible = classes.filter((c) => c.level === level || !c.level)
+    if (!eligible.length) continue // pas de classe pour ce niveau → laisse non assigné
+
+    // Tri M/F alternés
+    const girls = levelStudents.filter((s) => s.gender === "F")
+    const boys  = levelStudents.filter((s) => s.gender === "M")
+    const other = levelStudents.filter((s) => s.gender !== "F" && s.gender !== "M")
+    const sorted: StudentCard[] = []
     const max = Math.max(girls.length, boys.length)
     for (let i = 0; i < max; i++) {
       if (girls[i]) sorted.push(girls[i])
-      if (boys[i]) sorted.push(boys[i])
+      if (boys[i])  sorted.push(boys[i])
     }
     sorted.push(...other)
-  }
 
-  // Round-robin, respecting maxStudents
-  let idx = 0
-  for (const student of sorted) {
-    let placed = false
-    for (let attempt = 0; attempt < classes.length; attempt++) {
-      const cls = classes[(idx + attempt) % classes.length]
-      if (counts[cls.id] < cls.maxStudents) {
-        result[student.id] = cls.id
-        counts[cls.id]++
-        idx = (idx + attempt + 1) % classes.length
-        placed = true
-        break
+    // Round-robin sur les classes éligibles, dans la limite de maxStudents
+    let idx = 0
+    for (const student of sorted) {
+      let placed = false
+      for (let attempt = 0; attempt < eligible.length; attempt++) {
+        const cls = eligible[(idx + attempt) % eligible.length]
+        if (counts[cls.id] < cls.maxStudents) {
+          result[student.id] = cls.id
+          counts[cls.id]++
+          idx = (idx + attempt + 1) % eligible.length
+          placed = true
+          break
+        }
       }
+      if (!placed) result[student.id] = null // toutes les classes pleines → non assigné
     }
-    if (!placed) result[student.id] = null // overflow → unassigned
   }
 
   return result
@@ -93,6 +99,7 @@ export default function ClassComposer({
   teachers: Teacher[]
   initialAssignments: Record<string, string | null>
 }) {
+  const [classes, setClasses] = useState(initialClasses)
   const [assignments, setAssignments] = useState(initialAssignments)
   const [dragging, setDragging] = useState<string | null>(null)
   const [dragTarget, setDragTarget] = useState<string | null>(null)
@@ -130,7 +137,7 @@ export default function ClassComposer({
   // ── Actions ─────────────────────────────────────────────────────────────────
 
   function handleAutoDistribute() {
-    const result = autoDistributeAlgo(students, initialClasses)
+    const result = autoDistributeAlgo(students, classes)
     setAssignments(result)
     setSaved(false)
   }
@@ -183,12 +190,13 @@ export default function ClassComposer({
       {showNewClass && (
         <NewClassForm
           onClose={() => setShowNewClass(false)}
+          onCreated={(cls) => setClasses((prev) => [...prev, cls])}
         />
       )}
 
       {/* Grille : classes + non assignés */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {initialClasses.map((cls) => {
+        {classes.map((cls) => {
           const classStudents = studentsInClass(cls.id)
           const isOver = dragTarget === cls.id
           const isFull = classStudents.length >= cls.maxStudents
@@ -313,7 +321,13 @@ function StudentChip({
 
 // ── Nouvelle classe ───────────────────────────────────────────────────────────
 
-function NewClassForm({ onClose }: { onClose: () => void }) {
+function NewClassForm({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void
+  onCreated: (cls: ClassSlot) => void
+}) {
   const [name, setName] = useState("")
   const [level, setLevel] = useState("")
   const [maxStudents, setMaxStudents] = useState(25)
@@ -322,7 +336,8 @@ function NewClassForm({ onClose }: { onClose: () => void }) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     startTransition(async () => {
-      await createClass(name, level, maxStudents)
+      const newClass = await createClass(name, level, maxStudents)
+      onCreated(newClass)
       onClose()
     })
   }

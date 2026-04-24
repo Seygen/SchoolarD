@@ -77,7 +77,7 @@ export async function createClass(name: string, level: string, maxStudents: numb
   })
   if (!currentYear) throw new Error("Aucune année scolaire courante")
 
-  await prisma.class.create({
+  const created = await prisma.class.create({
     data: {
       schoolId,
       academicYearId: currentYear.id,
@@ -88,6 +88,15 @@ export async function createClass(name: string, level: string, maxStudents: numb
   })
 
   revalidatePath("/classes/composer")
+
+  return {
+    id: created.id,
+    name: created.name,
+    level: created.level,
+    maxStudents: created.maxStudents,
+    teacherId: null,
+    teacherName: null,
+  }
 }
 
 export async function assignTeacher(classId: string, userId: string) {
