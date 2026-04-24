@@ -3,12 +3,45 @@
 import { prisma } from "@/lib/db"
 import { auth } from "@/auth"
 import { revalidatePath } from "next/cache"
-import { ContactRelationship } from "@prisma/client"
+import { ContactRelationship, StudentLevel, Gender } from "@prisma/client"
+import { redirect } from "next/navigation"
 
 async function requireSchoolSession() {
   const session = await auth()
   if (!session || !session.user.schoolId) throw new Error("Non authentifié")
   return session
+}
+
+// ── Création d'un élève ───────────────────────────────────────────────────────
+
+export async function createStudent(formData: FormData) {
+  const session = await requireSchoolSession()
+  if (session.user.role !== "ADMIN") throw new Error("Accès refusé")
+
+  const schoolId = session.user.schoolId!
+  const firstName = (formData.get("firstName") as string).trim()
+  const lastName  = (formData.get("lastName")  as string).trim()
+  const dob       = formData.get("dateOfBirth") as string
+  const level     = formData.get("level") as StudentLevel
+  const gender    = (formData.get("gender") as string) || null
+  const notes     = (formData.get("notes") as string).trim() || null
+
+  if (!firstName || !lastName || !dob || !level) throw new Error("Champs obligatoires manquants")
+
+  const student = await prisma.student.create({
+    data: {
+      schoolId,
+      firstName,
+      lastName,
+      dateOfBirth: new Date(dob),
+      level,
+      gender: gender as Gender | null,
+      notes,
+    },
+  })
+
+  revalidatePath("/eleves")
+  redirect(`/eleves/${student.id}`)
 }
 
 // ── Observations ─────────────────────────────────────────────────────────────
