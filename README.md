@@ -28,26 +28,33 @@ Application web de gestion scolaire multi-tenant pour directeurs d'école, ensei
 
 ## Démarrage en local
 
-### Prérequis
+- [macOS / Linux](#macos--linux)
+- [Windows](#windows)
+
+---
+
+### macOS / Linux
+
+#### Prérequis
 
 - **Node.js** >= 20 (`node -v`)
 - **PostgreSQL** >= 14 (`psql --version`)
 - **npm** >= 10 (`npm -v`)
 
-### 1. Cloner le dépôt
+#### 1. Cloner le dépôt
 
 ```bash
 git clone <url-du-repo> schoolard
 cd schoolard
 ```
 
-### 2. Installer les dépendances
+#### 2. Installer les dépendances
 
 ```bash
 npm install
 ```
 
-### 3. Configurer les variables d'environnement
+#### 3. Configurer les variables d'environnement
 
 ```bash
 cp .env.example .env.local
@@ -67,7 +74,7 @@ Pour générer un `AUTH_SECRET` :
 openssl rand -base64 32
 ```
 
-### 4. Créer la base de données PostgreSQL
+#### 4. Créer la base de données PostgreSQL
 
 ```bash
 # Se connecter en superutilisateur
@@ -79,7 +86,7 @@ CREATE DATABASE schoolard OWNER schoolard_user;
 \q
 ```
 
-### 5. Appliquer les migrations et alimenter la base
+#### 5. Appliquer les migrations et alimenter la base
 
 ```bash
 DATABASE_URL="postgresql://schoolard_user:schoolard_dev@localhost:5432/schoolard" \
@@ -91,7 +98,110 @@ DATABASE_URL="postgresql://schoolard_user:schoolard_dev@localhost:5432/schoolard
   npm run db:seed
 ```
 
-Le seed crée :
+#### 6. Lancer le serveur de développement
+
+```bash
+npm run dev
+```
+
+Ouvrir [http://localhost:3000](http://localhost:3000).
+
+---
+
+### Windows
+
+#### Prérequis
+
+- **Node.js** >= 20 — télécharger sur [nodejs.org](https://nodejs.org) (installeur `.msi`)
+- **PostgreSQL** >= 14 — télécharger sur [postgresql.org](https://www.postgresql.org/download/windows/) (installeur EDB)  
+  Lors de l'installation, noter le mot de passe défini pour l'utilisateur `postgres` et laisser le port par défaut (`5432`).
+- **Git** — [git-scm.com](https://git-scm.com/download/win)
+
+Les commandes ci-dessous s'exécutent dans **PowerShell** (ou Git Bash).
+
+#### 1. Cloner le dépôt
+
+```powershell
+git clone <url-du-repo> schoolard
+cd schoolard
+```
+
+#### 2. Installer les dépendances
+
+```powershell
+npm install
+```
+
+#### 3. Configurer les variables d'environnement
+
+```powershell
+copy .env.example .env.local
+```
+
+Ouvrir `.env.local` avec un éditeur (Notepad, VS Code…) et renseigner **au minimum** :
+
+```env
+DATABASE_URL="postgresql://schoolard_user:schoolard_dev@localhost:5432/schoolard"
+AUTH_SECRET="un-secret-aléatoire-32-chars"
+NEXTAUTH_URL="http://localhost:3000"
+```
+
+Pour générer un `AUTH_SECRET` sous PowerShell :
+
+```powershell
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+#### 4. Créer la base de données PostgreSQL
+
+Ouvrir **pgAdmin** (installé avec PostgreSQL) ou lancer **SQL Shell (psql)** depuis le menu Démarrer.
+
+Dans SQL Shell, se connecter avec l'utilisateur `postgres` (mot de passe choisi à l'installation), puis :
+
+```sql
+CREATE USER schoolard_user WITH PASSWORD 'schoolard_dev' CREATEDB;
+CREATE DATABASE schoolard OWNER schoolard_user;
+\q
+```
+
+Ou via PowerShell si `psql` est dans le PATH (adapter le chemin si nécessaire) :
+
+```powershell
+# Ajouter psql au PATH si besoin :
+$env:PATH += ";C:\Program Files\PostgreSQL\16\bin"
+
+psql -U postgres -c "CREATE USER schoolard_user WITH PASSWORD 'schoolard_dev' CREATEDB;"
+psql -U postgres -c "CREATE DATABASE schoolard OWNER schoolard_user;"
+```
+
+#### 5. Appliquer les migrations et alimenter la base
+
+Sous PowerShell, les variables d'environnement en ligne se définissent avec `$env:` :
+
+```powershell
+$env:DATABASE_URL="postgresql://schoolard_user:schoolard_dev@localhost:5432/schoolard"
+npx prisma migrate dev --name init
+```
+
+```powershell
+$env:DATABASE_URL="postgresql://schoolard_user:schoolard_dev@localhost:5432/schoolard"
+npm run db:seed
+```
+
+#### 6. Lancer le serveur de développement
+
+```powershell
+npm run dev
+```
+
+Ouvrir [http://localhost:3000](http://localhost:3000).
+
+---
+
+### Comptes de démo (macOS, Linux et Windows)
+
+Le seed crée les comptes suivants :
+
 | Compte | Email | Mot de passe | Notes |
 |---|---|---|---|
 | Super Admin | `admin@schoolard.fr` | `ChangeMe123!` | Requiert TOTP (voir ci-dessous) |
@@ -103,14 +213,6 @@ Importer dans une app 2FA (Google Authenticator, Authy, 1Password) ou générer 
 ```bash
 node -e "const t=require('otplib'); t.authenticator.options={secret:'ORABGQBGGNIGWRJ6'}; console.log(t.authenticator.generate('ORABGQBGGNIGWRJ6'))"
 ```
-
-### 6. Lancer le serveur de développement
-
-```bash
-npm run dev
-```
-
-Ouvrir [http://localhost:3000](http://localhost:3000).
 
 ---
 
