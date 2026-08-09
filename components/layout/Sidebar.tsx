@@ -12,6 +12,7 @@ const adminNav: NavItem[] = [
   { label: "Classes",         href: "/classes",           icon: "🏫" },
   { label: "Équipe",          href: "/equipe",            icon: "👨‍🏫" },
   { label: "Import",          href: "/import",            icon: "📂" },
+  { label: "Outils",          href: "/outils",            icon: "🖨️" },
   { label: "Notifications",   href: "/notifications/new", icon: "🔔" },
   { label: "Réglages",        href: "/reglages",          icon: "⚙️" },
 ]
@@ -20,6 +21,7 @@ const teacherNav: NavItem[] = [
   { label: "Tableau de bord", href: "/dashboard",         icon: "🏠" },
   { label: "Élèves",          href: "/eleves",            icon: "👥" },
   { label: "Mes classes",     href: "/classes",           icon: "🏫" },
+  { label: "Outils",          href: "/outils",            icon: "🖨️" },
   { label: "Notifications",   href: "/notifications/new", icon: "🔔" },
 ]
 
